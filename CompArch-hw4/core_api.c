@@ -40,31 +40,6 @@ void init_blocked_stats(int thread_nr) {
         blocked_stats.blocked_thread_context, 0, sizeof(tcontext) * thread_nr);
 }
 
-// void SIM_MemDataRead(uint32_t addr, int32_t *dst);
-//
-// void SIM_MemDataWrite(uint32_t addr, int32_t val);
-//
-// void SIM_MemInstRead(uint32_t line, Instruction *dst, int tid);
-//
-// typedef enum {
-// 	CMD_NOP = 0,
-//     CMD_ADD,     // dst <- src1 + src2
-//     CMD_SUB,     // dst <- src1 - src2
-//     CMD_ADDI,    // dst <- src1 + imm
-//     CMD_SUBI,    // dst <- src1 - imm
-//     CMD_LOAD,    // dst <- Mem[src1 + src2]  (src2 may be an immediate)
-//     CMD_STORE,   // Mem[dst + src2] <- src1  (src2 may be an immediate)
-// 	CMD_HALT,
-// } cmd_opcode;
-//
-// typedef struct _inst {
-// 	cmd_opcode opcode;
-// 	int dst_index;
-// 	int src1_index;
-// 	int src2_index_imm;
-// 	bool isSrc2Imm; // if the second argument is immediate
-// } Instruction;
-
 void CORE_BlockedMT() {
     int thread_nr = SIM_GetThreadsNum();
     int total_cycles = 0;
@@ -129,13 +104,13 @@ void CORE_BlockedMT() {
                 *cur_dest = cur_src1 - cur_src2;
                 break;
             case CMD_LOAD:
-                // LOAD $dst, $src1, $src2 dst <- Mem[src1 + src2]
+                /* LOAD $dst, $src1, $src2 dst <- Mem[src1 + src2] */
                 SIM_MemDataRead(cur_src1 + cur_src2, cur_dest);
                 alias_live_threads[cur_thread].blocked = load_lat;
                 blocked_threads_nr++;
                 break;
             case CMD_STORE:
-                // STORE $dst, $src1, $src2 Mem[dst + src2] < -src1
+                /* STORE $dst, $src1, $src2 Mem[dst + src2] < -src1 */
                 SIM_MemDataWrite(*cur_dest + cur_src2, cur_src1);
                 alias_live_threads[cur_thread].blocked = store_lat;
                 blocked_threads_nr++;
@@ -174,13 +149,16 @@ void CORE_BlockedMT() {
             total_cycles++;
         }
 
+        /* move on to the next availble thread, including the current one */
         for (int i = 0; i < thread_nr; i++) {
             int t = (cur_thread + i) % thread_nr;
             if (alias_live_threads[t].is_alive &&
                 !alias_live_threads[t].blocked) {
                 cur_thread = t;
+                /* if it's not the same thread then we need to switch */
                 if (i > 0) {
                     total_cycles += switch_lat;
+                    /* decrenemt the remaining time by the switch latency */
                     for (int t = 0; t < thread_nr; t++) {
                         if (alias_live_threads[t].is_alive &&
                             alias_live_threads[t].blocked > 0) {
@@ -314,6 +292,7 @@ void CORE_FinegrainedMT() {
             total_cycles++;
         }
 
+        /* move on to the next availble thread */
         for (int i = 1; i < thread_nr; i++) {
             int t = (cur_thread + i) % thread_nr;
             if (alias_live_threads[t].is_alive &&
